@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const multer = require("multer");
 const csv = require("csv-parser");
 const { Readable } = require("stream");
@@ -16,6 +17,7 @@ const upload = multer({
 const app = express();
 const PORT = 3000;
 
+app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
