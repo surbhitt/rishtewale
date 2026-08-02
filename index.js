@@ -9,6 +9,7 @@ require("dotenv").config();
 const client = require("./db");
 const authRoutes = require("./routes/auth.routes");
 const profileRoutes = require("./routes/profile.routes");
+const bulkUploadRoutes = require("./routes/bulkUpload.routes");
 
 const upload = multer({
     storage: multer.memoryStorage()
@@ -26,6 +27,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/profile", bulkUploadRoutes);
 
 
 async function write_to_db(rows) {
@@ -98,10 +100,22 @@ async function initialization() {
     await client.query(`
         CREATE TABLE IF NOT EXISTS users(
             id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
+            phone TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
+    `);
+
+    // Migration safety net: accounts used to be identified by email; move existing tables over
+    // to phone-based login without touching a table that was already created in the new shape.
+    await client.query(`
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email')
+               AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
+                ALTER TABLE users RENAME COLUMN email TO phone;
+            END IF;
+        END $$;
     `);
 
     await client.query(`
@@ -115,10 +129,10 @@ async function initialization() {
             -- (POST /api/profile) - see utils/profileFields.js.
             full_name TEXT,
             date_of_birth DATE,
+            time_of_birth TIME,
             gender TEXT CHECK (gender IN ('male', 'female', 'prefer_not_to_say')),
             place_of_birth TEXT,
             current_city TEXT,
-            current_state TEXT,
             height_feet SMALLINT,
             height_inches SMALLINT,
             marital_status TEXT CHECK (marital_status IN ('never_married', 'divorced', 'widowed', 'separated')),
@@ -126,8 +140,6 @@ async function initialization() {
 
             -- Step 2: Religion & Community
             caste TEXT,
-            sub_caste TEXT,
-            gotra TEXT,
             mother_gotra TEXT,
             maternal_grandmother_gotra TEXT,
             manglik_status TEXT CHECK (manglik_status IN ('manglik', 'non_manglik', 'partial_manglik', 'dont_know')),
@@ -156,11 +168,11 @@ async function initialization() {
             about_family TEXT,
             own_property TEXT,
 
-            -- Step 5: Partner Preferences & Contact
+            -- Step 5: Partner Preferences
+            -- Contact number lives on users.phone (also the login identifier), not duplicated here.
             preferred_cities TEXT[],
             preferred_education TEXT,
             other_preferences TEXT,
-            contact_number TEXT,
 
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -176,7 +188,6 @@ async function initialization() {
             ALTER COLUMN gender DROP NOT NULL,
             ALTER COLUMN place_of_birth DROP NOT NULL,
             ALTER COLUMN current_city DROP NOT NULL,
-            ALTER COLUMN current_state DROP NOT NULL,
             ALTER COLUMN height_feet DROP NOT NULL,
             ALTER COLUMN height_inches DROP NOT NULL,
             ALTER COLUMN marital_status DROP NOT NULL,
@@ -196,8 +207,18 @@ async function initialization() {
             ALTER COLUMN mother_occupation DROP NOT NULL,
             ALTER COLUMN num_brothers DROP NOT NULL,
             ALTER COLUMN num_sisters DROP NOT NULL,
-            ALTER COLUMN family_type DROP NOT NULL,
-            ALTER COLUMN contact_number DROP NOT NULL
+            ALTER COLUMN family_type DROP NOT NULL
+    `);
+
+    // Migration safety net: drop fields removed from the form and add fields introduced later,
+    // for a `profiles` table created before this shape existed.
+    await client.query(`
+        ALTER TABLE profiles
+            DROP COLUMN IF EXISTS current_state,
+            DROP COLUMN IF EXISTS sub_caste,
+            DROP COLUMN IF EXISTS gotra,
+            DROP COLUMN IF EXISTS contact_number,
+            ADD COLUMN IF NOT EXISTS time_of_birth TIME
     `);
 
     console.log("INITIALIZATION COMPLETED");

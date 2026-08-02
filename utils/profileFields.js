@@ -4,10 +4,10 @@ const PROFILE_FIELDS = [
     // Step 1 - Personal Details
     { key: "fullName", column: "full_name", required: true },
     { key: "dateOfBirth", column: "date_of_birth", required: true },
+    { key: "timeOfBirth", column: "time_of_birth", required: true },
     { key: "gender", column: "gender", required: true, oneOf: ["male", "female", "prefer_not_to_say"] },
     { key: "placeOfBirth", column: "place_of_birth", required: true },
     { key: "currentCity", column: "current_city", required: true },
-    { key: "currentState", column: "current_state", required: true },
     { key: "heightFeet", column: "height_feet", required: true },
     { key: "heightInches", column: "height_inches", required: true },
     { key: "maritalStatus", column: "marital_status", required: true, oneOf: ["never_married", "divorced", "widowed", "separated"] },
@@ -15,8 +15,6 @@ const PROFILE_FIELDS = [
 
     // Step 2 - Religion & Community
     { key: "caste", column: "caste", required: true },
-    { key: "subCaste", column: "sub_caste", required: false },
-    { key: "gotra", column: "gotra", required: false },
     { key: "motherGotra", column: "mother_gotra", required: false },
     { key: "maternalGrandmotherGotra", column: "maternal_grandmother_gotra", required: false },
     { key: "manglikStatus", column: "manglik_status", required: false, oneOf: ["manglik", "non_manglik", "partial_manglik", "dont_know"] },
@@ -48,8 +46,7 @@ const PROFILE_FIELDS = [
     // Step 5 - Partner Preferences & Contact
     { key: "preferredCities", column: "preferred_cities", required: false, isArray: true },
     { key: "preferredEducation", column: "preferred_education", required: false },
-    { key: "otherPreferences", column: "other_preferences", required: false },
-    { key: "contactNumber", column: "contact_number", required: true }
+    { key: "otherPreferences", column: "other_preferences", required: false }
 ];
 
 const INT_RANGES = {
@@ -118,4 +115,6 @@ function validateProfileFields(body, { partial = false } = {}) {
     return { errors, values };
 }
 
-module.exports = { PROFILE_FIELDS, validateProfileFields };
+const COLUMN_TO_FIELD = Object.fromEntries(PROFILE_FIELDS.map((field) => [field.column, field]));
+
+module.exports = { PROFILE_FIELDS, COLUMN_TO_FIELD, validateProfileFields };

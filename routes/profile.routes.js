@@ -3,33 +3,9 @@ const express = require("express");
 const client = require("../db");
 const authenticateToken = require("../middleware/auth");
 const { validateProfileFields } = require("../utils/profileFields");
+const upsertProfile = require("../utils/upsertProfile");
 
 const router = express.Router();
-
-// Upserts only the columns present in `values`. On first write for a user this creates the row
-// (any column left out stays NULL / falls back to its DB default); on later writes it only
-// touches the columns supplied, leaving the rest of the profile as-is.
-async function upsertProfile(userId, values) {
-    const columns = Object.keys(values);
-    const params = columns.map((col) => values[col]);
-    const insertColumns = ["user_id", ...columns];
-    const placeholders = insertColumns.map((_, i) => `$${i + 1}`);
-    const updateAssignments = columns.map((col) => `${col} = EXCLUDED.${col}`);
-
-    const result = await client.query(
-        `
-        INSERT INTO profiles(${insertColumns.join(", ")})
-        VALUES(${placeholders.join(", ")})
-        ON CONFLICT (user_id) DO UPDATE SET
-            ${updateAssignments.join(", ")},
-            updated_at = now()
-        RETURNING *
-        `,
-        [userId, ...params]
-    );
-
-    return result.rows[0];
-}
 
 // Full submit: every required field (per registration_fields.pdf) must be present.
 router.post("/", authenticateToken, async (req, res) => {
@@ -74,9 +50,10 @@ router.get("/", authenticateToken, async (req, res) => {
     try {
         const result = await client.query(
             `
-            SELECT *, DATE_PART('year', AGE(date_of_birth)) AS age
+            SELECT profiles.*, users.phone, DATE_PART('year', AGE(profiles.date_of_birth)) AS age
             FROM profiles
-            WHERE user_id = $1
+            JOIN users ON users.id = profiles.user_id
+            WHERE profiles.user_id = $1
             `,
             [req.userId]
         );
