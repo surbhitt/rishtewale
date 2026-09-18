@@ -3,6 +3,20 @@
 
 $ curl -F "file=@test.csv" https://rishtewale-eiee.onrender.com/api/upload
 
+## Tests
+
+`tests/api.test.js` is an integration suite (Node's built-in test runner, no mocking) that hits a
+running server over HTTP and exercises every endpoint below. Start the server first, then:
+
+$ npm test
+
+By default it targets `http://localhost:3000`; point it elsewhere with `TEST_BASE_URL`:
+
+$ TEST_BASE_URL=https://rishtewale-eiee.onrender.com npm test
+
+It writes real throwaway users/profiles through whatever `DB_URL` the server is using and doesn't
+clean up after itself - run it against a local/dev database, not production. Requires Node 18+.
+
 ## Auth
 
 Accounts are identified by phone number (10-digit Indian mobile, `+91` prefix optional - it's
