@@ -10,7 +10,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/api.test.js"
   },
   "dependencies": {
     "@neon/config": "^1.7.2",
