@@ -84,8 +84,6 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
 
 async function initialization() {
-    await client.connect();
-
     await client.query(`
         CREATE TABLE IF NOT EXISTS rishtas(
             id SERIAL PRIMARY KEY,
