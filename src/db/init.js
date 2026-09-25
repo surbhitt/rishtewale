@@ -1,90 +1,9 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const csv = require("csv-parser");
-const { Readable } = require("stream");
+import pool from "./index.js";
 
-require("dotenv").config();
-
-const client = require("./db");
-const authRoutes = require("./routes/auth.routes");
-const profileRoutes = require("./routes/profile.routes");
-const bulkUploadRoutes = require("./routes/bulkUpload.routes");
-
-const upload = multer({
-    storage: multer.memoryStorage()
-});
-
-const app = express();
-const PORT = 3000;
-
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req, res) => {
-    res.send("access /api/upload");
-});
-
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/profile", bulkUploadRoutes);
-
-
-async function write_to_db(rows) {
-    try {
-        for (const row of rows) {
-            await client.query(
-                `
-                INSERT INTO rishtas(name, age, gender, phone, email)
-                VALUES($1, $2, $3, $4, $5)
-                `,
-                [
-                    row.name,
-                    Number(row.age),
-                    row.gender,
-                    row.phone,
-                    row.email
-                ]
-            );
-        }
-
-        return true;
-
-    } catch (error) {
-        console.log(error);
-        return false;
-    }
-}
-
-
-app.post("/api/upload", upload.single("file"), async (req, res) => {
-    const rows = [];
-
-    Readable.from(req.file.buffer)
-        .pipe(csv())
-        .on("data", (row) => {
-            rows.push(row);
-        })
-        .on("end", async () => {
-            console.log(rows);
-
-            const written = await write_to_db(rows);
-
-            if (written) {
-                res.send("data written to the table");
-            } else {
-                res.status(500).send("data write FAILED");
-            }
-        })
-        .on("error", (err) => {
-            console.log(err);
-            res.status(500).send("CSV parsing failed");
-        });
-});
-
-
-async function initialization() {
-    await client.query(`
+// Idempotent schema setup. Runs on every boot: CREATE TABLE IF NOT EXISTS statements plus a few
+// small migrations, so an empty database sets itself up on first boot.
+export default async function initializeDatabase() {
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS rishtas(
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
@@ -95,28 +14,35 @@ async function initialization() {
         )
     `);
 
-    await client.query(`
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS users(
             id SERIAL PRIMARY KEY,
-            phone TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE,
+            phone TEXT,
             password_hash TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     `);
 
-    // Migration safety net: accounts used to be identified by email; move existing tables over
-    // to phone-based login without touching a table that was already created in the new shape.
-    await client.query(`
+    // Migration safety net for databases created before email-based login:
+    //  - add the email column if missing (nullable + unique, so email-only web accounts work and
+    //    older phone-only accounts created by bulk-upload remain valid),
+    //  - relax the old NOT NULL / UNIQUE constraints on phone (bulk-upload still writes phone, but
+    //    it is no longer the login identifier).
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
+    await pool.query(`
         DO $$
         BEGIN
-            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email')
-               AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
-                ALTER TABLE users RENAME COLUMN email TO phone;
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'users_email_key'
+            ) THEN
+                ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
             END IF;
         END $$;
     `);
+    await pool.query(`ALTER TABLE users ALTER COLUMN phone DROP NOT NULL`);
 
-    await client.query(`
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS profiles(
             id SERIAL PRIMARY KEY,
             user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -179,7 +105,7 @@ async function initialization() {
 
     // Migration safety net: relax constraints for a `profiles` table created before partial
     // (PATCH) saves were supported, where these columns were still NOT NULL.
-    await client.query(`
+    await pool.query(`
         ALTER TABLE profiles
             ALTER COLUMN full_name DROP NOT NULL,
             ALTER COLUMN date_of_birth DROP NOT NULL,
@@ -210,7 +136,7 @@ async function initialization() {
 
     // Migration safety net: drop fields removed from the form and add fields introduced later,
     // for a `profiles` table created before this shape existed.
-    await client.query(`
+    await pool.query(`
         ALTER TABLE profiles
             DROP COLUMN IF EXISTS current_state,
             DROP COLUMN IF EXISTS sub_caste,
@@ -219,22 +145,30 @@ async function initialization() {
             ADD COLUMN IF NOT EXISTS time_of_birth TIME
     `);
 
+    // Payments: one row per PayU transaction attempt. `txnid` is our own generated id sent to
+    // PayU and used to correlate the callback / verification. Status is the source of truth only
+    // after server-side verification, never trusted from the client.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS payments(
+            id SERIAL PRIMARY KEY,
+            txnid TEXT UNIQUE NOT NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            amount NUMERIC(12, 2) NOT NULL,
+            productinfo TEXT NOT NULL,
+            firstname TEXT,
+            email TEXT,
+            phone TEXT,
+            status TEXT NOT NULL DEFAULT 'initiated'
+                CHECK (status IN ('initiated', 'pending', 'success', 'failure')),
+            payu_mihpayid TEXT,
+            payu_mode TEXT,
+            error_message TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS payments_user_id_idx ON payments(user_id)`);
+
     console.log("INITIALIZATION COMPLETED");
 }
-
-
-async function main() {
-    try {
-        await initialization();
-        
-        app.listen(PORT, () => {
-            console.log("Started server");
-        });
-
-    } catch (err) {
-        console.log("FAILED to start server:", err);
-        process.exit(1);
-    }
-}
-
-main();

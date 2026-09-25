@@ -13,11 +13,14 @@
 // IMPORTANT: run this against a local/dev server, not production - it does not clean up after
 // itself, so every run leaves behind a handful of test accounts and profiles.
 
-const { describe, it, before } = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const XLSX = require("xlsx");
+import { describe, it, before } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import XLSX from "xlsx";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000";
 const PASSWORD = "testpass123";
@@ -26,6 +29,10 @@ function randomPhone() {
     const prefix = String(6 + Math.floor(Math.random() * 4)); // 6-9
     const rest = String(Date.now() + Math.floor(Math.random() * 1000)).slice(-9);
     return prefix + rest;
+}
+
+function randomEmail() {
+    return `test_${Date.now()}_${Math.floor(Math.random() * 100000)}@example.com`;
 }
 
 async function api(path, { method = "GET", body, headers = {} } = {}) {
@@ -115,49 +122,49 @@ before(async () => {
 });
 
 describe("auth", () => {
-    const phone = randomPhone();
+    const email = randomEmail();
 
-    it("signs up with a new phone number", async () => {
-        const { status, body } = await api("/api/auth/signup", { method: "POST", body: { phone, password: PASSWORD } });
+    it("signs up with a new email", async () => {
+        const { status, body } = await api("/api/auth/signup", { method: "POST", body: { email, password: PASSWORD } });
         assert.equal(status, 201);
         assert.ok(body.token);
-        assert.equal(body.user.phone, phone);
+        assert.equal(body.user.email, email);
     });
 
     it("rejects a duplicate signup", async () => {
-        const { status, body } = await api("/api/auth/signup", { method: "POST", body: { phone, password: PASSWORD } });
+        const { status, body } = await api("/api/auth/signup", { method: "POST", body: { email, password: PASSWORD } });
         assert.equal(status, 409);
         assert.match(body.error, /already exists/);
     });
 
     it("rejects a password shorter than 8 characters", async () => {
-        const { status } = await api("/api/auth/signup", { method: "POST", body: { phone: randomPhone(), password: "short" } });
+        const { status } = await api("/api/auth/signup", { method: "POST", body: { email: randomEmail(), password: "short" } });
         assert.equal(status, 400);
     });
 
-    it("rejects a malformed phone number", async () => {
-        const { status } = await api("/api/auth/signup", { method: "POST", body: { phone: "12345", password: PASSWORD } });
+    it("rejects a malformed email", async () => {
+        const { status } = await api("/api/auth/signup", { method: "POST", body: { email: "not-an-email", password: PASSWORD } });
         assert.equal(status, 400);
     });
 
     it("logs in with correct credentials", async () => {
-        const { status, body } = await api("/api/auth/login", { method: "POST", body: { phone, password: PASSWORD } });
+        const { status, body } = await api("/api/auth/login", { method: "POST", body: { email, password: PASSWORD } });
         assert.equal(status, 200);
         assert.ok(body.token);
     });
 
     it("rejects login with the wrong password", async () => {
-        const { status } = await api("/api/auth/login", { method: "POST", body: { phone, password: "wrongpassword" } });
+        const { status } = await api("/api/auth/login", { method: "POST", body: { email, password: "wrongpassword" } });
         assert.equal(status, 401);
     });
 });
 
 describe("profile", () => {
-    const phone = randomPhone();
+    const email = randomEmail();
     let token;
 
     before(async () => {
-        const { body } = await api("/api/auth/signup", { method: "POST", body: { phone, password: PASSWORD } });
+        const { body } = await api("/api/auth/signup", { method: "POST", body: { email, password: PASSWORD } });
         token = body.token;
     });
 
@@ -223,10 +230,10 @@ describe("profile", () => {
         assert.equal(body.age, expectedAge(FULL_PROFILE.dateOfBirth));
     });
 
-    it("GET returns the saved profile with the account phone and age", async () => {
+    it("GET returns the saved profile with the account email and age", async () => {
         const { status, body } = await authed("/api/profile");
         assert.equal(status, 200);
-        assert.equal(body.phone, phone);
+        assert.equal(body.email, email);
         assert.equal(body.age, expectedAge(FULL_PROFILE.dateOfBirth));
     });
 });

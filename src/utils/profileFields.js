@@ -1,6 +1,6 @@
 // One entry per registration_fields.pdf field (photo fields excluded).
 // `key` is the JSON field name clients send, `column` is the DB column.
-const PROFILE_FIELDS = [
+export const PROFILE_FIELDS = [
     // Step 1 - Personal Details
     { key: "fullName", column: "full_name", required: true },
     { key: "dateOfBirth", column: "date_of_birth", required: true },
@@ -58,7 +58,7 @@ const INT_RANGES = {
 
 // partial: true  -> PATCH semantics, only validates/collects keys present in body, "required" is not enforced
 // partial: false -> POST semantics, every `required` field must be present and non-empty
-function validateProfileFields(body, { partial = false } = {}) {
+export function validateProfileFields(body, { partial = false } = {}) {
     const errors = [];
     const values = {};
 
@@ -115,6 +115,4 @@ function validateProfileFields(body, { partial = false } = {}) {
     return { errors, values };
 }
 
-const COLUMN_TO_FIELD = Object.fromEntries(PROFILE_FIELDS.map((field) => [field.column, field]));
-
-module.exports = { PROFILE_FIELDS, COLUMN_TO_FIELD, validateProfileFields };
+export const COLUMN_TO_FIELD = Object.fromEntries(PROFILE_FIELDS.map((field) => [field.column, field]));

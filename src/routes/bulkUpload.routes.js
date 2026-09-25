@@ -1,13 +1,14 @@
-const express = require("express");
-const multer = require("multer");
-const XLSX = require("xlsx");
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
+import crypto from "node:crypto";
 
-const client = require("../db");
-const upsertProfile = require("../utils/upsertProfile");
-const { COLUMN_TO_FIELD, validateProfileFields } = require("../utils/profileFields");
-const { PHONE_RE, normalizePhone } = require("../utils/phone");
+import express from "express";
+import multer from "multer";
+import XLSX from "xlsx";
+import bcrypt from "bcryptjs";
+
+import pool from "../db/index.js";
+import upsertProfile from "../utils/upsertProfile.js";
+import { COLUMN_TO_FIELD, validateProfileFields } from "../utils/profileFields.js";
+import { PHONE_RE, normalizePhone } from "../utils/phone.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -70,7 +71,7 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return res.status(400).json({ error: "Could not read the uploaded file" });
     }
 
@@ -98,7 +99,7 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
         }
 
         try {
-            const existing = await client.query("SELECT id FROM users WHERE phone = $1", [phone]);
+            const existing = await pool.query("SELECT id FROM users WHERE phone = $1", [phone]);
             let userId;
 
             if (existing.rows.length > 0) {
@@ -106,7 +107,7 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
             } else {
                 const temporaryPassword = crypto.randomBytes(9).toString("base64url");
                 const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-                const created = await client.query(
+                const created = await pool.query(
                     "INSERT INTO users(phone, password_hash) VALUES($1, $2) RETURNING id",
                     [phone, passwordHash]
                 );
@@ -125,7 +126,7 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
             await upsertProfile(userId, values);
             profilesSaved.push(phone);
         } catch (error) {
-            console.log(error);
+            console.error(error);
             rowErrors.push({ row: rowNumber, phone, errors: ["Unexpected server error while saving this row"] });
         }
     }
@@ -133,4 +134,4 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
     res.json({ accountsCreated, profilesSaved, rowErrors });
 });
 
-module.exports = router;
+export default router;

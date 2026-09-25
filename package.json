@@ -1,15 +1,17 @@
 {
   "name": "rishtewale",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API for a matrimonial-profile app: phone-number accounts, multi-step registration, and bulk profile import.",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "type": "module",
+  "main": "src/server.js",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "test": "node --test tests/api.test.js"
   },
   "dependencies": {
@@ -22,8 +24,11 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
-    "mutter": "^1.0.1",
+    "payu-websdk": "^1.3.1",
     "pg": "^8.22.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

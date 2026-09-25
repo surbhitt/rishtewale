@@ -1,16 +1,16 @@
-const client = require("../db");
+import pool from "../db/index.js";
 
 // Upserts only the columns present in `values`. On first write for a user this creates the row
 // (any column left out stays NULL / falls back to its DB default); on later writes it only
 // touches the columns supplied, leaving the rest of the profile as-is.
-async function upsertProfile(userId, values) {
+export default async function upsertProfile(userId, values) {
     const columns = Object.keys(values);
     const params = columns.map((col) => values[col]);
     const insertColumns = ["user_id", ...columns];
     const placeholders = insertColumns.map((_, i) => `$${i + 1}`);
     const updateAssignments = columns.map((col) => `${col} = EXCLUDED.${col}`);
 
-    const result = await client.query(
+    const result = await pool.query(
         `
         INSERT INTO profiles(${insertColumns.join(", ")})
         VALUES(${placeholders.join(", ")})
@@ -24,5 +24,3 @@ async function upsertProfile(userId, values) {
 
     return result.rows[0];
 }
-
-module.exports = upsertProfile;

@@ -1,6 +1,8 @@
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
 
-function authenticateToken(req, res, next) {
+import config from "../config/index.js";
+
+export default function authenticateToken(req, res, next) {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
@@ -8,7 +10,7 @@ function authenticateToken(req, res, next) {
         return res.status(401).json({ error: "Missing authorization token" });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, payload) => {
+    jwt.verify(token, config.jwtSecret, (err, payload) => {
         if (err) {
             return res.status(403).json({ error: "Invalid or expired token" });
         }
@@ -17,5 +19,3 @@ function authenticateToken(req, res, next) {
         next();
     });
 }
-
-module.exports = authenticateToken;
