@@ -10,6 +10,7 @@ const client = require("./db");
 const authRoutes = require("./routes/auth.routes");
 const profileRoutes = require("./routes/profile.routes");
 const bulkUploadRoutes = require("./routes/bulkUpload.routes");
+const adminRoutes = require("./routes/admin.routes");
 
 const upload = multer({
     storage: multer.memoryStorage()
@@ -28,6 +29,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/profile", bulkUploadRoutes);
+app.use("/api/admin/profiles", adminRoutes);
 
 
 async function write_to_db(rows) {

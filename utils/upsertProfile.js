@@ -8,15 +8,14 @@ async function upsertProfile(userId, values) {
     const params = columns.map((col) => values[col]);
     const insertColumns = ["user_id", ...columns];
     const placeholders = insertColumns.map((_, i) => `$${i + 1}`);
-    const updateAssignments = columns.map((col) => `${col} = EXCLUDED.${col}`);
+    const updateAssignments = [...columns.map((col) => `${col} = EXCLUDED.${col}`), "updated_at = now()"];
 
     const result = await client.query(
         `
         INSERT INTO profiles(${insertColumns.join(", ")})
         VALUES(${placeholders.join(", ")})
         ON CONFLICT (user_id) DO UPDATE SET
-            ${updateAssignments.join(", ")},
-            updated_at = now()
+            ${updateAssignments.join(", ")}
         RETURNING *, DATE_PART('year', AGE(date_of_birth)) AS age
         `,
         [userId, ...params]

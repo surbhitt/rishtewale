@@ -3,8 +3,8 @@
 const PROFILE_FIELDS = [
     // Step 1 - Personal Details
     { key: "fullName", column: "full_name", required: true },
-    { key: "dateOfBirth", column: "date_of_birth", required: true },
-    { key: "timeOfBirth", column: "time_of_birth", required: true },
+    { key: "dateOfBirth", column: "date_of_birth", required: true, format: "date" },
+    { key: "timeOfBirth", column: "time_of_birth", required: true, format: "time" },
     { key: "gender", column: "gender", required: true, oneOf: ["male", "female", "prefer_not_to_say"] },
     { key: "placeOfBirth", column: "place_of_birth", required: true },
     { key: "currentCity", column: "current_city", required: true },
@@ -49,6 +49,19 @@ const PROFILE_FIELDS = [
     { key: "otherPreferences", column: "other_preferences", required: false }
 ];
 
+function isValidDate(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+    }
+    const [y, m, d] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+function isValidTime(value) {
+    return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value);
+}
+
 const INT_RANGES = {
     numBrothers: { min: 0 },
     numSisters: { min: 0 },
@@ -89,11 +102,22 @@ function validateProfileFields(body, { partial = false } = {}) {
             continue;
         }
 
+        if (field.format === "date" && !isValidDate(value)) {
+            errors.push(`${field.key} must be a real date in YYYY-MM-DD format`);
+            continue;
+        }
+
+        if (field.format === "time" && !isValidTime(value)) {
+            errors.push(`${field.key} must be a time in HH:MM (24-hour) format`);
+            continue;
+        }
+
         values[field.column] = value;
     }
 
     for (const [key, range] of Object.entries(INT_RANGES)) {
-        if (!Object.prototype.hasOwnProperty.call(body, key) || body[key] === undefined) {
+        // null / "" means "clear this field" (handled above), so only real values are range-checked
+        if (!Object.prototype.hasOwnProperty.call(body, key) || body[key] === undefined || body[key] === null || body[key] === "") {
             continue;
         }
 

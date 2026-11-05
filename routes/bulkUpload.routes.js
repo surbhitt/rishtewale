@@ -1,10 +1,8 @@
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
 
-const client = require("../db");
+const findOrCreateUser = require("../utils/ensureUser");
 const upsertProfile = require("../utils/upsertProfile");
 const { COLUMN_TO_FIELD, validateProfileFields } = require("../utils/profileFields");
 const { PHONE_RE, normalizePhone } = require("../utils/phone");
@@ -98,19 +96,9 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
         }
 
         try {
-            const existing = await client.query("SELECT id FROM users WHERE phone = $1", [phone]);
-            let userId;
+            const { userId, created, temporaryPassword } = await findOrCreateUser(phone);
 
-            if (existing.rows.length > 0) {
-                userId = existing.rows[0].id;
-            } else {
-                const temporaryPassword = crypto.randomBytes(9).toString("base64url");
-                const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-                const created = await client.query(
-                    "INSERT INTO users(phone, password_hash) VALUES($1, $2) RETURNING id",
-                    [phone, passwordHash]
-                );
-                userId = created.rows[0].id;
+            if (created) {
                 accountsCreated.push({ phone, temporaryPassword });
             }
 
